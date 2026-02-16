@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Movimientos de la Tierra: Rotación y Traslación</title>
+  <style>
+    :root{
+      --txt:#eef3ff; --muted:#b7c4ef; --line:rgba(255,255,255,.18);
+      --bg:rgba(5,10,25,.72); --card:rgba(0,0,0,.28);
+      --ok: rgba(159,255,193,.45); --warn: rgba(255,216,154,.45);
+    }
+    html,body{height:100%; margin:0; overflow:hidden; background:#000; font-family:system-ui,Arial; color:var(--txt);}
+    #stage{position:fixed; inset:0; z-index:0;}
+
+    #controls{
+      position:fixed; left:14px; top:14px; z-index:10;
+      border:1px solid var(--line); border-radius:14px; padding:10px 12px;
+      background:rgba(5,10,25,.62); backdrop-filter: blur(8px);
+      width:min(380px, calc(100vw - 28px));
+    }
+    .title{font-weight:750; font-size:14.5px; margin-bottom:4px;}
+    .sub{color:var(--muted); font-size:12.5px; line-height:1.35;}
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;}
+    .btn{
+      border:1px solid var(--line); border-radius:12px; padding:7px 10px;
+      cursor:pointer; color:var(--txt); background:rgba(32,50,104,.92); font-size:12.5px;
+    }
+    .btn:hover{filter:brightness(1.12)}
+    .tag{
+      border:1px solid var(--line); border-radius:999px; padding:6px 10px;
+      color:var(--muted); background:rgba(0,0,0,.2); font-size:12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #cards{
+      position:fixed; right:14px; top:14px; z-index:10;
+      width:min(430px, calc(100vw - 28px));
+      display:grid; gap:10px;
+    }
+    .card{
+      border:1px solid var(--line); border-radius:16px; padding:12px;
+      background:var(--bg); backdrop-filter: blur(8px);
+      box-shadow:0 18px 50px rgba(0,0,0,.45);
+    }
+    .card h3{margin:0 0 6px 0; font-size:14.5px;}
+    .card p{margin:0; color:var(--muted); font-size:13px; line-height:1.5;}
+    .mini{margin-top:10px; display:grid; gap:8px;}
+    .pill{
+      background:var(--card); border:1px solid var(--line); border-radius:14px;
+      padding:9px 10px; color:var(--muted); font-size:12.8px; line-height:1.4;
+    }
+    .pill b{color:var(--txt)}
+    .pill.ok{border-color: var(--ok);}
+    .pill.warn{border-color: var(--warn);}
+
+    @media (max-width: 980px){ #cards{right:14px; top:auto; bottom:14px;} }
+    /* =========================
+   SOL NEÓN (más amarillo)
+   ========================= */
+.sun2d{
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  z-index: 2;
+  pointer-events: none;
+
+  background:
+    radial-gradient(circle at 35% 30%,
+      rgba(255,255,255,.95) 0 10%,
+      rgba(255,250,210,.80) 12% 22%,
+      rgba(255,225,120,.55) 26% 38%,
+      rgba(255,193,7,.95) 55%,
+      rgba(255,160,0,1) 100%
+    );
+
+  box-shadow:
+    inset 0 0 55px rgba(255,255,255,.85),
+    inset 0 0 140px rgba(255,235,59,.45),
+    inset 0 0 260px rgba(255,193,7,.35),
+
+    0 0 40px rgba(255,241,118,.65),
+    0 0 120px rgba(255,213,79,.60),
+    0 0 260px rgba(255,193,7,.55),
+    0 0 420px rgba(255,179,0,.45);
+
+  animation: sunPulse 2.8s ease-in-out infinite;
+  filter: saturate(1.25);
+}
+
+.sun2d::before{
+  content:"";
+  position:absolute;
+  inset:-22px;
+  border-radius:50%;
+  background: radial-gradient(circle,
+    rgba(255,235,59,.35) 0 45%,
+    rgba(255,193,7,.18) 60%,
+    transparent 74%
+  );
+  filter: blur(7px);
+  animation: sunPulse2 2.8s ease-in-out infinite;
+}
+
+.sun2d::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(255,255,255,.18) 0 6px,
+      rgba(255,255,255,0) 6px 12px
+    );
+  mix-blend-mode: soft-light;
+  opacity:.55;
+  filter: blur(.2px);
+  animation: sunScan 1.8s linear infinite;
+  content: none !important;
+}
+
+@keyframes sunPulse{
+  0%,100%{ transform: scale(1); }
+  50%{ transform: scale(1.03); }
+}
+@keyframes sunPulse2{
+  0%,100%{ opacity:.85; }
+  50%{ opacity:1; }
+}
+@keyframes sunScan{
+  0%{ background-position:0 0; }
+  100%{ background-position:120px 120px; }
+}
+
+/* Parar animaciones del sol */
+.sun2d,
+.sun2d::before,
+.sun2d::after{
+  animation: none !important;
+  
+}
+
+
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+    <div class="sun2d" aria-hidden="true"></div>
+
+
+  <div id="controls">
+    <div class="title">Simulación 3D: Tierra y Sol</div>
+    <div class="sub">←/→ rotación · T traslación ON/OFF · R reiniciar</div>
+    <div class="row">
+      <button class="btn" id="toggleOrbit">Traslación: OFF</button>
+      <span class="tag" id="clockTag">Hora simulada: 0.0 h</span>
+    </div>
+  </div>
+
+  <div id="cards">
+    <div class="card">
+      <h3>La Tierra: forma y división</h3>
+      <p>
+        La Tierra tiene una forma <b>casi esférica</b>, ligeramente <b>achatada por los polos</b>.
+        Se considera dividida en dos <b>hemisferios</b> (norte y sur) por el <b>plano ecuatorial</b>.
+      </p>
+      <div class="mini">
+        <div class="pill ok"><b>Radio polar:</b> 6.357 km · <b>Radio ecuatorial:</b> 6.378 km.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Composición y planeta habitable</h3>
+      <p>
+        La Tierra está rodeada por una <b>atmósfera</b> y gran parte de su superficie por una <b>hidrosfera</b>.
+        Es el único planeta del sistema solar conocido con <b>seres vivos</b>.
+      </p>
+      <div class="mini">
+        <div class="pill"><b>Composición aprox.:</b> hierro 32%, oxígeno 30%, silicio 15%, magnesio 14%.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Rotación y consecuencias</h3>
+      <p>
+        La Tierra rota sobre un eje imaginario (polo norte–polo sur) en <b>24 horas</b>
+        y gira de <b>oeste a este</b>.
+      </p>
+      <div class="mini">
+        <div class="pill ok"><b>Consecuencia 1:</b> <b>día y noche</b> (cambia la zona iluminada por el Sol).</div>
+        <div class="pill warn"><b>Consecuencia 2:</b> movimiento <b>aparente</b> de los astros de <b>este a oeste</b>.</div>
+        <div class="pill"><b>Inclinación del eje:</b> ≈ 23,5° (afecta a horas de luz según latitud y época del año).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Traslación (órbita alrededor del Sol)</h3>
+      <p>
+        La Tierra realiza una <b>traslación</b> alrededor del Sol en ≈ <b>365 días</b>.
+        Puedes activarla o desactivarla para observar la órbita.
+      </p>
+      <div class="mini">
+        <div class="pill ok"><b>Observación:</b> durante la traslación, la Tierra sigue rotando.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (sin imports, perfecto para Live Server) -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
+  <script>
+    const stage = document.getElementById("stage");
+    const toggleBtn = document.getElementById("toggleOrbit");
+    const clockTag  = document.getElementById("clockTag");
+
+    // Estado
+    let manualSpin = 0;
+    let earthAngleDeg = 0;
+    let orbitOn = false;
+    let orbitPhase = 0;
+    let moonPhase = 0;
+
+    toggleBtn.addEventListener("click", () => {
+      orbitOn = !orbitOn;
+      toggleBtn.textContent = `Traslación: ${orbitOn ? "ON" : "OFF"}`;
+    });
+
+    window.addEventListener("keydown",(e)=>{
+      if(e.key==="ArrowLeft")  manualSpin = -0.06;
+      if(e.key==="ArrowRight") manualSpin =  0.06;
+
+      const k = e.key.toLowerCase();
+      if(k==="t"){
+        orbitOn = !orbitOn;
+        toggleBtn.textContent = `Traslación: ${orbitOn ? "ON" : "OFF"}`;
+      }
+      if(k==="r"){
+        manualSpin = 0;
+        earthAngleDeg = 0;
+        orbitPhase = 0;
+        moonPhase = 0;
+        earthSystem.position.set(orbitRadius, 0, 0);
+        earthSystem.rotation.set(0,0,0);
+        clouds.rotation.set(0,0,0);
+        moon.position.set(moonOrbitR, 0, 0);
+      }
+    });
+
+    window.addEventListener("keyup",(e)=>{
+      if(e.key==="ArrowLeft" || e.key==="ArrowRight") manualSpin = 0;
+    });
+
+    // Scene
+    const scene = new THREE.Scene();
+
+    // Fondo con imagen (pon tu archivo en: assets/galaxy1.png)
+    const loader = new THREE.TextureLoader();
+    const skyTex = loader.load("./assets/galaxy1.png");
+    skyTex.colorSpace = THREE.SRGBColorSpace;
+
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(2500, 64, 64),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide })
+    );
+    scene.add(sky);
+
+    // Cámara y renderer (NO borrar)
+    const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 6000);
+    camera.position.set(0, 12, 52);
+
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    stage.appendChild(renderer.domElement);
+
+    // Sol realista (textura + halo)
+    const sunPos = new THREE.Vector3(0,0,0);
+
+    const sunTex = loader.load("https://threejs.org/examples/textures/planets/sun.jpg");
+    sunTex.colorSpace = THREE.SRGBColorSpace;
+
+    const sunMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(7.5, 96, 96),
+      new THREE.MeshBasicMaterial({ map: sunTex })
+    );
+    sunMesh.position.copy(sunPos);
+    scene.add(sunMesh);
+
+    const glowTex = loader.load("https://threejs.org/examples/textures/sprites/glow.png");
+    const sunGlow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTex,
+        color: 0xffcc66,
+        transparent: true,
+        opacity: 0.60,
+        depthWrite: false
+      })
+    );
+    sunGlow.scale.set(36, 36, 1);
+    sunGlow.position.copy(sunPos);
+    scene.add(sunGlow);
+
+    // Luz del Sol + ambient bajo (para que exista “noche”)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.25);
+    scene.add(sunLight);
+    scene.add(new THREE.AmbientLight(0x223344, 0.07));
+
+    // Órbita de la Tierra
+    const orbitRadius = 26;
+    const orbitPts = [];
+    for(let i=0;i<=260;i++){
+      const a = i/260 * Math.PI*2;
+      orbitPts.push(new THREE.Vector3(Math.cos(a)*orbitRadius, 0, Math.sin(a)*orbitRadius));
+    }
+    scene.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(orbitPts),
+      new THREE.LineBasicMaterial({ color:0x2a3f72 })
+    ));
+
+    // Tierra día/noche (shader)
+    const texDay   = loader.load("https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg");
+    const texNight = loader.load("https://threejs.org/examples/textures/planets/earth_lights_2048.png");
+    const texCloud = loader.load("https://threejs.org/examples/textures/planets/earth_clouds_1024.png");
+    texDay.colorSpace   = THREE.SRGBColorSpace;
+    texNight.colorSpace = THREE.SRGBColorSpace;
+    texCloud.colorSpace = THREE.SRGBColorSpace;
+
+    const earthMat = new THREE.ShaderMaterial({
+      uniforms: {
+        dayMap:   { value: texDay },
+        nightMap: { value: texNight },
+        lightDir: { value: new THREE.Vector3(1,0,0) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vNormalW;
+        void main(){
+          vUv = uv;
+          vNormalW = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+          gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D dayMap;
+        uniform sampler2D nightMap;
+        uniform vec3 lightDir;
+        varying vec2 vUv;
+        varying vec3 vNormalW;
+
+        void main(){
+          vec3 n = normalize(vNormalW);
+          vec3 l = normalize(lightDir);
+
+          float ndl = dot(n, l);
+          float dayFactor = smoothstep(-0.15, 0.25, ndl);
+
+          vec3 dayCol = texture2D(dayMap, vUv).rgb;
+          vec3 nightCol = texture2D(nightMap, vUv).rgb * 0.95;
+
+          vec3 col = mix(nightCol, dayCol, dayFactor);
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+
+    const earth = new THREE.Mesh(new THREE.SphereGeometry(4, 96, 96), earthMat);
+
+    const clouds = new THREE.Mesh(
+      new THREE.SphereGeometry(4.05, 96, 96),
+      new THREE.MeshPhongMaterial({ map: texCloud, transparent:true, opacity:0.45, depthWrite:false })
+    );
+
+    const atmosphere = new THREE.Mesh(
+      new THREE.SphereGeometry(4.18, 96, 96),
+      new THREE.MeshBasicMaterial({ color:0x6aa8ff, transparent:true, opacity:0.10, depthWrite:false })
+    );
+
+    const earthSystem = new THREE.Group();
+    earthSystem.add(earth, clouds, atmosphere);
+    earthSystem.position.set(orbitRadius, 0, 0);
+    scene.add(earthSystem);
+
+    // Luna en órbita (sin información)
+    const moonOrbitR = 8.2;
+   
+    // Texturas luna (color + relieve)
+const moonColorURL = "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/lroc_color_poles_1k.jpg";
+const moonDispURL  = "https://s3-us-west-2.amazonaws.com/s.cdpn.io/17271/ldem_3_8bit.jpg";
+const moonColorTex = loader.load(moonColorURL);
+moonColorTex.colorSpace = THREE.SRGBColorSpace;
+
+const moonDispTex = loader.load(moonDispURL);
+moonDispTex.colorSpace = THREE.NoColorSpace; // mapa de altura
+
+const moon = new THREE.Mesh(
+  new THREE.SphereGeometry(1.15, 72, 72),
+  new THREE.MeshPhongMaterial({
+    map: moonColorTex,
+    displacementMap: moonDispTex,
+    displacementScale: 0.05,
+    bumpMap: moonDispTex,
+    bumpScale: 0.03,
+    shininess: 0,
+    reflectivity: 0
+  })
+);
+earthSystem.add(moon);
+
+// Anillo de la órbita de la Luna
+const moonOrbitPts = [];
+for (let i = 0; i <= 200; i++) {
+  const a = (i / 200) * Math.PI * 2;
+  moonOrbitPts.push(new THREE.Vector3(
+    Math.cos(a) * moonOrbitR,
+    0,
+    Math.sin(a) * moonOrbitR
+  ));
+} // <-- cierre del for
+
+const moonOrbitLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints(moonOrbitPts),
+  new THREE.LineBasicMaterial({ color: 0x2a3f72 })
+);
+earthSystem.add(moonOrbitLine);
+
+
+    // Fill light suave para que la luna no quede negra total
+    const fill = new THREE.DirectionalLight(0xaac6ff, 0.18);
+    fill.position.set(60, 20, 30);
+    scene.add(fill);
+
+    // Animación
+    let last = performance.now();
+    function animate(now){
+      const dt = (now - last)/1000;
+      last = now;
+
+      // Rotación
+      const baseSpin = 0.010;
+      earthSystem.rotation.y += baseSpin + manualSpin;
+      earthAngleDeg = (earthAngleDeg + (baseSpin + manualSpin) * 180/Math.PI) % 360;
+
+      // Nubes
+      clouds.rotation.y += 0.015;
+
+      // Traslación (opcional)
+      if(orbitOn){
+        orbitPhase += dt * 0.18;
+        earthSystem.position.x = Math.cos(orbitPhase) * orbitRadius;
+        earthSystem.position.z = Math.sin(orbitPhase) * orbitRadius;
+      }
+
+      // Luna orbitando
+    moonPhase += dt * 1.1;
+moon.position.x = Math.cos(moonPhase) * moonOrbitR;
+moon.position.z = Math.sin(moonPhase) * moonOrbitR;
+
+      // Día/noche correcto: dirección TIERRA → SOL
+      const lightDir = new THREE.Vector3().subVectors(sunPos, earthSystem.position).normalize();
+      earthMat.uniforms.lightDir.value.copy(lightDir);
+
+      // Orientar luz direccional hacia la Tierra
+      sunLight.position.copy(sunPos);
+      sunLight.target.position.copy(earthSystem.position);
+      scene.add(sunLight.target);
+
+      // “Vivo” el sol
+      sunMesh.rotation.y += dt * 0.05;
+
+      // Hora simulada (15° = 1 h)
+      const hours = (((earthAngleDeg % 360) + 360) % 360) / 15;
+      clockTag.textContent = `Hora simulada: ${hours.toFixed(1)} h`;
+
+      camera.lookAt(0,0,0);
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+
+    // Resize
+    window.addEventListener("resize", ()=>{
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
